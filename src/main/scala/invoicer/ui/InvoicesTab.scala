@@ -23,6 +23,7 @@ final class InvoicesTab(
     itemService: ItemService,
     invoiceService: InvoiceService,
     onExportRequested: InvoiceDetails => Unit,
+    onPreviewRequested: InvoiceDetails => Unit,
     defaultVatRate: BigDecimal
 ) extends Tab:
   setText("Factures")
@@ -106,6 +107,10 @@ final class InvoicesTab(
     exportButton.setOnAction(_ => exportSelectedInvoice())
     exportButton.getStyleClass.add("primary-button")
 
+    val previewButton = new Button("Aperçu")
+    previewButton.setOnAction(_ => previewSelectedInvoice())
+    previewButton.getStyleClass.add("ghost-button")
+
     val editButton = new Button("Editer facture")
     editButton.setOnAction(_ => openEditorForSelectedInvoice())
     editButton.getStyleClass.add("ghost-button")
@@ -114,7 +119,7 @@ final class InvoicesTab(
     refreshButton.setOnAction(_ => refreshInvoices())
     refreshButton.getStyleClass.add("ghost-button")
 
-    val buttons = new HBox(10, exportButton, editButton, refreshButton)
+    val buttons = new HBox(10, exportButton, previewButton, editButton, refreshButton)
     buttons.setAlignment(Pos.CENTER_RIGHT)
     buttons.getStyleClass.add("button-row")
 
@@ -506,6 +511,15 @@ final class InvoicesTab(
           case None => DialogSupport.showError("Erreur", "Impossible de charger la facture sélectionnée.")
       case None =>
         DialogSupport.showError("Attention", "Sélectionnez une facture à exporter.")
+
+  private def previewSelectedInvoice(): Unit =
+    Option(invoicesTable.getSelectionModel.getSelectedItem) match
+      case Some(row) =>
+        invoiceService.loadDetails(row.invoiceId) match
+          case Some(details) => onPreviewRequested(details)
+          case None => DialogSupport.showError("Erreur", "Impossible de charger la facture sélectionnée.")
+      case None =>
+        DialogSupport.showError("Attention", "Sélectionnez une facture à prévisualiser.")
 
   private def createSectionTitle(text: String): Label =
     val label = new Label(text)

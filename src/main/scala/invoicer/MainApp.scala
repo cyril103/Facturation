@@ -2,7 +2,7 @@ package invoicer
 
 import invoicer.service._
 import invoicer.ui._
-import invoicer.util.DialogSupport
+import invoicer.util.{DesktopSupport, DialogSupport}
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.scene.control.{ScrollPane, TabPane}
@@ -33,6 +33,14 @@ final class MainApp extends Application:
         catch
           case ex: Exception =>
             DialogSupport.showError("Erreur", s"Impossible de générer le PDF : ${ex.getMessage}")
+      ,
+      onPreviewRequested = details =>
+        try
+          val path = pdfService.exportInvoice(details)
+          DesktopSupport.open(path)
+        catch
+          case ex: Exception =>
+            DialogSupport.showError("Erreur", s"Impossible d'afficher l'aperçu : ${ex.getMessage}")
       ,
       defaultVatRate = settingsService.vatRate()
     )
