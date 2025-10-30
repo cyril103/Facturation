@@ -24,4 +24,8 @@ final class ItemService:
         ItemDAO.insert(item)
 
   def delete(item: Item): Unit =
-    item.id.foreach(ItemDAO.delete)
+    item.id.foreach { id =>
+      if ItemDAO.isInUse(id) then
+        throw IllegalStateException("Impossible de supprimer un article deja utilise dans une facture.")
+      ItemDAO.delete(id)
+    }

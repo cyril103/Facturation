@@ -6,11 +6,11 @@ import invoicer.service.{ClientService, InvoiceService, ItemService}
 import invoicer.util.{DialogSupport, Formatting}
 
 import java.time.LocalDate
-import java.util.UUID
 import javafx.collections.FXCollections
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
 import javafx.scene.control._
+import javafx.scene.input.KeyEvent
 import javafx.scene.layout.{BorderPane, GridPane, HBox, Priority, VBox}
 import javafx.stage.{Modality, Stage, Window}
 import javafx.util.StringConverter
@@ -35,7 +35,7 @@ private[ui] final class InvoiceEditorWindow(
   private val itemsData = FXCollections.observableArrayList(itemService.list()*)
   private val invoiceLinesData = FXCollections.observableArrayList[InvoiceLineRow]()
 
-  private val invoiceNumberField = new TextField(generateInvoiceNumber())
+  private val invoiceNumberField = new TextField()
   private val invoiceDatePicker = new DatePicker(LocalDate.now())
   private val clientCombo = new ComboBox[Client](clientsData)
   private val vatRateField = new TextField((defaultVatRate * 100).setScale(2, BigDecimal.RoundingMode.HALF_UP).toString())
@@ -66,8 +66,10 @@ private[ui] final class InvoiceEditorWindow(
 
   private var currentDefaultVatRate = defaultVatRate
   private var currentEditingInvoiceId: Option[Int] = None
+  private var autoNumberEnabled = true
 
   initializeComboBoxes()
+  initializeInvoiceNumberField()
 
   private val root = buildRoot()
   private val scene = new Scene(root, 820, 720)
@@ -258,6 +260,13 @@ private[ui] final class InvoiceEditorWindow(
     clientsData.setAll(clientService.list()*)
     itemsData.setAll(itemService.list()*)
 
+  private def initializeInvoiceNumberField(): Unit =
+    invoiceNumberField.addEventFilter(KeyEvent.KEY_TYPED, _ => autoNumberEnabled = false)
+    invoiceDatePicker.valueProperty().addListener { (_, _, newDate) =>
+      if currentEditingInvoiceId.isEmpty && autoNumberEnabled && newDate != null then
+        invoiceNumberField.setText(generateInvoiceNumber(newDate))
+    }
+
   private def addInvoiceLine(): Unit =
     parseLineInput() match
       case Success(row) =>
@@ -377,8 +386,10 @@ private[ui] final class InvoiceEditorWindow(
   private def resetForm(): Unit =
     currentEditingInvoiceId = None
     editModeLabel.setText("Creation d'une nouvelle facture")
-    invoiceNumberField.setText(generateInvoiceNumber())
-    invoiceDatePicker.setValue(LocalDate.now())
+    val today = LocalDate.now()
+    invoiceDatePicker.setValue(today)
+    autoNumberEnabled = true
+    invoiceNumberField.setText(generateInvoiceNumber(today))
     clientCombo.getSelectionModel.clearSelection()
     vatRateField.setText((currentDefaultVatRate * 100).setScale(2, BigDecimal.RoundingMode.HALF_UP).toString())
     invoiceLinesData.clear()
@@ -389,6 +400,7 @@ private[ui] final class InvoiceEditorWindow(
     currentEditingInvoiceId = details.invoice.id
     editModeLabel.setText(s"Edition de la facture ${details.invoice.number}")
 
+    autoNumberEnabled = false
     invoiceNumberField.setText(details.invoice.number)
     invoiceDatePicker.setValue(details.invoice.date)
 
@@ -423,8 +435,12 @@ private[ui] final class InvoiceEditorWindow(
     label.getStyleClass.add("section-subtitle")
     label
 
-  private def generateInvoiceNumber(): String =
-    s"FAC-${LocalDate.now().getYear}-${UUID.randomUUID().toString.take(6).toUpperCase}"
+  private def generateInvoiceNumber(forDate: LocalDate): String =
+    Try(invoiceService.nextInvoiceNumber(forDate)) match
+      case Success(number) => number
+      case Failure(_) =>
+        val year = forDate.getYear
+        s"FAC-$year-${java.util.UUID.randomUUID().toString.take(8).toUpperCase}"
 
   private def formatVat(rate: BigDecimal): String =
     (rate * 100).setScale(2, BigDecimal.RoundingMode.HALF_UP).bigDecimal.stripTrailingZeros().toPlainString

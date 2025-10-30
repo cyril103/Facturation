@@ -12,7 +12,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.logging.{Level, Logger}
 import scala.util.Using
 
-/** Génération de PDF à partir d'une facture. */
+/** Generation de PDF a partir d'une facture. */
 final class PdfService(
     invoiceService: InvoiceService,
     companyService: CompanyService
@@ -41,115 +41,155 @@ final class PdfService(
     val outputPath = outputDirectory.resolve(fileName)
 
     Using.resource(new PDDocument()) { document =>
-      val page = new PDPage(PDRectangle.A4)
-      document.addPage(page)
-
       val company = companyService.load()
+      var currentPage = new PDPage(PDRectangle.A4)
+      document.addPage(currentPage)
 
-      Using.resource(new PDPageContentStream(document, page)) { contentStream =>
-        val margin = 50f
-        val pageWidth = page.getMediaBox.getWidth
-        val startX = margin
-        var cursorY = page.getMediaBox.getHeight - margin
+      val margin = 50f
+      val startX = margin
+      var cursorY = currentPage.getMediaBox.getHeight - margin
+      var contentStream = new PDPageContentStream(document, currentPage)
 
-        // En-tête entreprise
+      def closeStream(): Unit =
+        if contentStream != null then contentStream.close()
+
+      def newPage(): Unit =
+        closeStream()
+        currentPage = new PDPage(PDRectangle.A4)
+        document.addPage(currentPage)
+        contentStream = new PDPageContentStream(document, currentPage)
+        cursorY = currentPage.getMediaBox.getHeight - margin
+
+      def ensureSpace(height: Float): Unit =
+        if cursorY - height < margin then newPage()
+
+      def addVerticalSpace(space: Float): Unit =
+        if space > 0 then
+          if cursorY - space < margin then newPage()
+          cursorY -= space
+
+      val colDescriptionWidth = 260f
+      val colQuantityWidth = 60f
+      val colUnitWidth = 100f
+      val colTotalWidth = 100f
+      val rowHeight = 20f
+
+      def optionalLines(label: String, value: Option[String]): Seq[String] =
+        value.flatMap(v => Option(v.trim).filter(_.nonEmpty)) match
+          case Some(v) =>
+            val parts = v.split("\\r?\\n").toSeq.map(_.trim).filter(_.nonEmpty)
+            if parts.isEmpty then Seq(s"$label : -")
+            else
+              val indent = " " * (label.length + 3)
+              val first = s"$label : ${parts.head}"
+              val rest = parts.tail.map(part => s"$indent$part")
+              first +: rest
+          case None =>
+            Seq(s"$label : -")
+
+      def writeLine(text: String, font: PDType1Font, size: Float, leading: Float): Unit =
+        ensureSpace(leading)
         contentStream.beginText()
-        contentStream.setFont(PDType1Font.HELVETICA_BOLD, 14)
+        contentStream.setFont(font, size)
         contentStream.newLineAtOffset(startX, cursorY)
-        contentStream.showText(company.name)
+        contentStream.showText(text)
         contentStream.endText()
+        cursorY -= leading
 
-        cursorY -= 20
-        val companyLines = Seq(
-          company.address.getOrElse(""),
-          company.email.map(e => s"Email : $e").getOrElse(""),
-          company.phone.map(p => s"Téléphone : $p").getOrElse(""),
-          company.siret.map(s => s"SIRET : $s").getOrElse("")
-        ).filter(_.nonEmpty)
+      def drawTableHeader(): Unit =
+        ensureSpace(rowHeight)
+        val headerY = cursorY
+        var cursorX = startX
+        val headers = Seq(
+          "Description" -> colDescriptionWidth,
+          "Qte" -> colQuantityWidth,
+          "PU HT" -> colUnitWidth,
+          "Total HT" -> colTotalWidth
+        )
+        headers.foreach { case (label, width) =>
+          contentStream.addRect(cursorX, headerY - rowHeight, width, rowHeight)
+          contentStream.stroke()
 
-        companyLines.foreach { line =>
-          cursorY -= 14
           contentStream.beginText()
-          contentStream.setFont(PDType1Font.HELVETICA, 12)
-          contentStream.newLineAtOffset(startX, cursorY)
-          contentStream.showText(line)
+          contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12)
+          contentStream.newLineAtOffset(cursorX + 4, headerY - 15)
+          contentStream.showText(label)
           contentStream.endText()
+
+          cursorX += width
         }
+        cursorY -= rowHeight
 
-        // Titre facture
-        cursorY -= 40
-        contentStream.beginText()
-        contentStream.setFont(PDType1Font.HELVETICA_BOLD, 18)
-        val title = s"FACTURE ${details.invoice.number}"
-        val titleWidth = PDType1Font.HELVETICA_BOLD.getStringWidth(title) / 1000f * 18
-        contentStream.newLineAtOffset(pageWidth - margin - titleWidth, cursorY)
-        contentStream.showText(title)
-        contentStream.endText()
+      def drawTableRow(
+          description: String,
+          quantity: String,
+          unitPrice: String,
+          total: String
+      ): Unit =
+        if cursorY - rowHeight < margin then
+          newPage()
+          drawTableHeader()
+        val rowY = cursorY
+        val values = Seq(
+          description -> colDescriptionWidth,
+          quantity -> colQuantityWidth,
+          unitPrice -> colUnitWidth,
+          total -> colTotalWidth
+        )
+        var cursorX = startX
+        values.foreach { case (text, width) =>
+          contentStream.addRect(cursorX, rowY - rowHeight, width, rowHeight)
+          contentStream.stroke()
 
-        cursorY -= 20
-        contentStream.beginText()
-        contentStream.setFont(PDType1Font.HELVETICA, 12)
-        val dateText = s"Date : ${details.invoice.date}"
-        val dateWidth = PDType1Font.HELVETICA.getStringWidth(dateText) / 1000f * 12
-        contentStream.newLineAtOffset(pageWidth - margin - dateWidth, cursorY)
-        contentStream.showText(dateText)
-        contentStream.endText()
-
-        // Coordonnées client
-        cursorY -= 40
-        contentStream.beginText()
-        contentStream.setFont(PDType1Font.HELVETICA_BOLD, 13)
-        contentStream.newLineAtOffset(startX, cursorY)
-        contentStream.showText("Client")
-        contentStream.endText()
-
-        val clientLines = Seq(
-          details.client.name,
-          details.client.address.getOrElse(""),
-          details.client.email.getOrElse(""),
-          details.client.phone.getOrElse(""),
-          details.client.siret.map(s => s"SIRET : $s").getOrElse("")
-        ).filter(_.nonEmpty)
-
-        clientLines.foreach { line =>
-          cursorY -= 16
           contentStream.beginText()
-          contentStream.setFont(PDType1Font.HELVETICA, 12)
-          contentStream.newLineAtOffset(startX, cursorY)
-          contentStream.showText(line)
+          contentStream.setFont(PDType1Font.HELVETICA, 11)
+          contentStream.newLineAtOffset(cursorX + 4, rowY - 15)
+          contentStream.showText(text)
           contentStream.endText()
+
+          cursorX += width
         }
+        cursorY -= rowHeight
+
+      try
+        writeLine(company.name, PDType1Font.HELVETICA_BOLD, 14, 18f)
+        val companyInfo =
+          optionalLines("Adresse", company.address) ++
+            optionalLines("Email", company.email) ++
+            optionalLines("Telephone", company.phone) ++
+            optionalLines("SIRET", company.siret)
+        companyInfo.foreach(line => writeLine(line, PDType1Font.HELVETICA, 12, 14f))
+
+        addVerticalSpace(18f)
+
+        writeLine(s"FACTURE ${details.invoice.number}", PDType1Font.HELVETICA_BOLD, 18, 24f)
+        writeLine(s"Date : ${details.invoice.date}", PDType1Font.HELVETICA, 12, 16f)
+
+        addVerticalSpace(16f)
+
+        writeLine("Client", PDType1Font.HELVETICA_BOLD, 13, 18f)
+        val clientInfo =
+          optionalLines("Nom", Some(details.client.name)) ++
+            optionalLines("Adresse", details.client.address) ++
+            optionalLines("Email", details.client.email) ++
+            optionalLines("Telephone", details.client.phone) ++
+            optionalLines("SIRET", details.client.siret)
+        clientInfo.foreach(line => writeLine(line, PDType1Font.HELVETICA, 12, 16f))
+
+        addVerticalSpace(18f)
 
         // Tableau des lignes
-        cursorY -= 30
-        val tableStartY = cursorY
-        val colDescriptionWidth = 260f
-        val colQuantityWidth = 60f
-        val colUnitWidth = 100f
-        val colTotalWidth = 100f
-        // En-têtes
-        drawTableHeader(contentStream, startX, tableStartY, colDescriptionWidth, colQuantityWidth, colUnitWidth, colTotalWidth)
-
-        var rowY = tableStartY - 20
+        drawTableHeader()
         details.lines.foreach { line =>
           drawTableRow(
-            contentStream,
-            startX,
-            rowY,
-            colDescriptionWidth,
-            colQuantityWidth,
-            colUnitWidth,
-            colTotalWidth,
             line.description,
             line.quantity.bigDecimal.stripTrailingZeros().toPlainString,
             line.unitPriceHt.bigDecimal.stripTrailingZeros().toPlainString,
             Formatting.formatAmount(line.totalHt)
           )
-          rowY -= 20
         }
 
-        // Totaux
-        cursorY = rowY - 10
+        addVerticalSpace(10f)
         val totalsX = startX + colDescriptionWidth + colQuantityWidth
 
         val vatPercent = (details.invoice.vatRate * 100).setScale(2, BigDecimal.RoundingMode.HALF_UP)
@@ -161,7 +201,7 @@ final class PdfService(
         )
 
         linesTotaux.foreach { case (label, value) =>
-          cursorY -= 18
+          ensureSpace(18f)
           contentStream.beginText()
           contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12)
           contentStream.newLineAtOffset(totalsX, cursorY)
@@ -173,74 +213,12 @@ final class PdfService(
           contentStream.newLineAtOffset(totalsX + colUnitWidth, cursorY)
           contentStream.showText(value)
           contentStream.endText()
+          cursorY -= 18
         }
-      }
+      finally
+        closeStream()
 
       document.save(outputPath.toFile)
     }
 
     outputPath
-
-  private def drawTableHeader(
-      contentStream: PDPageContentStream,
-      startX: Float,
-      startY: Float,
-      colDescriptionWidth: Float,
-      colQuantityWidth: Float,
-      colUnitWidth: Float,
-      colTotalWidth: Float
-  ): Unit =
-    val headers = Seq(
-      "Description" -> colDescriptionWidth,
-      "Qté" -> colQuantityWidth,
-      "PU HT" -> colUnitWidth,
-      "Total HT" -> colTotalWidth
-    )
-
-    var cursorX = startX
-    headers.foreach { case (label, width) =>
-      contentStream.addRect(cursorX, startY - 20, width, 20)
-      contentStream.stroke()
-
-      contentStream.beginText()
-      contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12)
-      contentStream.newLineAtOffset(cursorX + 4, startY - 15)
-      contentStream.showText(label)
-      contentStream.endText()
-
-      cursorX += width
-    }
-
-  private def drawTableRow(
-      contentStream: PDPageContentStream,
-      startX: Float,
-      startY: Float,
-      colDescriptionWidth: Float,
-      colQuantityWidth: Float,
-      colUnitWidth: Float,
-      colTotalWidth: Float,
-      description: String,
-      quantity: String,
-      unitPrice: String,
-      total: String
-  ): Unit =
-    val values = Seq(
-      description -> colDescriptionWidth,
-      quantity -> colQuantityWidth,
-      unitPrice -> colUnitWidth,
-      total -> colTotalWidth
-    )
-
-    var cursorX = startX
-    values.foreach { case (text, width) =>
-      contentStream.addRect(cursorX, startY - 20, width, 20)
-      contentStream.stroke()
-
-      contentStream.beginText()
-      contentStream.setFont(PDType1Font.HELVETICA, 11)
-      contentStream.newLineAtOffset(cursorX + 4, startY - 15)
-      contentStream.showText(text)
-      contentStream.endText()
-
-      cursorX += width
-    }

@@ -9,6 +9,31 @@ import scala.util.Using
 /** Accès aux factures et lignes via JDBC. */
 object InvoiceDAO:
 
+  private val NumberPattern = "^FAC-(\\d{4})-(\\d+)$".r
+
+  def nextSequenceNumber(year: Int): Int =
+    val sql =
+      """SELECT number
+        |FROM invoices
+        |WHERE number LIKE ?
+        |ORDER BY number ASC""".stripMargin
+    Using.resource(Database.connection()) { conn =>
+      Using.resource(conn.prepareStatement(sql)) { ps =>
+        ps.setString(1, s"FAC-$year-%")
+        Using.resource(ps.executeQuery()) { rs =>
+          var maxSeq = 0
+          while rs.next() do
+            val number = rs.getString("number")
+            number match
+              case NumberPattern(_, seq) =>
+                val value = seq.toIntOption.getOrElse(0)
+                if value > maxSeq then maxSeq = value
+              case _ => ()
+          maxSeq + 1
+        }
+      }
+    }
+
   def insert(invoice: Invoice, lines: Seq[InvoiceLine]): Invoice =
     require(lines.nonEmpty, "Une facture doit contenir au moins une ligne")
     Using.resource(Database.connection()) { conn =>
@@ -50,6 +75,9 @@ object InvoiceDAO:
         conn.commit()
         invoice.copy(id = Some(invoiceId))
       catch
+        case e: java.sql.SQLException if Option(e.getMessage).exists(_.toLowerCase.contains("unique")) =>
+          conn.rollback()
+          throw IllegalArgumentException("Le numero de facture est deja utilise.")
         case e: Exception =>
           conn.rollback()
           throw e

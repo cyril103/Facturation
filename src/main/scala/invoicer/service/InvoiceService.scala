@@ -13,6 +13,11 @@ final class InvoiceService:
       invoice -> client.name
     }
 
+  def nextInvoiceNumber(forDate: LocalDate = LocalDate.now()): String =
+    val year = forDate.getYear
+    val sequence = InvoiceDAO.nextSequenceNumber(year)
+    f"FAC-$year-$sequence%04d"
+
   def loadDetails(invoiceId: Int): Option[InvoiceDetails] =
     InvoiceDAO.findDetails(invoiceId)
 

@@ -91,3 +91,15 @@ object ItemDAO:
         ps.executeUpdate()
       }
     }
+
+  def isInUse(id: Int): Boolean =
+    val sql = "SELECT COUNT(1) FROM invoice_lines WHERE item_id = ?"
+    Using.resource(Database.connection()) { conn =>
+      Using.resource(conn.prepareStatement(sql)) { ps =>
+        ps.setInt(1, id)
+        Using.resource(ps.executeQuery()) { rs =>
+          rs.next()
+          rs.getInt(1) > 0
+        }
+      }
+    }
