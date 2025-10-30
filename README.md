@@ -1,38 +1,46 @@
-# Invoicer – Application de facturation JavaFX / Scala 3
+# Invoicer - Application de facturation Scala 3 / JavaFX
 
-Application desktop de gestion de facturation écrite en Scala 3.3.6 et JavaFX. Elle couvre la gestion des clients, des articles, la création de factures avec calculs automatiques et l’export PDF via Apache PDFBox. Les données sont stockées localement dans une base SQLite.
+Invoicer est une application desktop de gestion de facturation ecrite en Scala 3.3.6 et JavaFX. Elle couvre la gestion des clients et des articles, la creation/edition de factures avec calculs automatiques (HT, TVA, TTC) et l'export PDF via Apache PDFBox. Toutes les donnees sont stockees localement dans SQLite.
 
-## Fonctionnalités principales
-- CRUD complet sur les clients et les articles avec recherche rapide.
-- Création de factures : choix du client, date, numéro libre, ajout de lignes via bouton « Ajouter ».
-- Calcul automatique des montants (sous-total HT, TVA, total TTC) selon un taux paramétrable (20 % par défaut).
-- Paramétrage des coordonnées de l’entreprise émettrice et du taux de TVA dans l’onglet « Paramètres ».
-- Export d’une facture sélectionnée en PDF (format A4) avec mise en page simple : en-tête entreprise, coordonnées client, tableau des lignes et récapitulatif des totaux.
-- Internationalisation minimale en français (libellés UI en français).
+## Fonctionnalites principales
+- Gestion CRUD des clients et des articles, avec champ de recherche instantanee.
+- Creation et edition de factures dans l'onglet Factures (numero libre, date, client, lignes dynamiques via bouton `Add`).
+- Calcul automatique des totaux HT, TVA et TTC sur la base du taux en vigueur (20 % par defaut).
+- Parametrage des coordonnees de l'entreprise emettrice et du taux de TVA dans l'onglet Parametres.
+- Export d'une facture selectionnee en PDF A4 depuis l'onglet Factures (nommage `FACTURE_<numero>.pdf`).
+- Interface utilisateur en francais, habillee d'un theme pastel moderne (voir `src/main/resources/styles/app.css`).
 
 ## Structure du projet
-- `src/main/scala/invoicer` : code Scala (base de données, modèles, services, interface JavaFX).
-- `src/main/resources` : ressources (emplacement dédié aux fichiers i18n supplémentaires si besoin).
-- `invoicer.db` : base SQLite créée automatiquement dans `%USERPROFILE%\app\` (ou `$HOME/app/` sous Linux/macOS).
+- `build.sbt`, `project/` : configuration sbt.
+- `src/main/scala/invoicer` : code Scala (models, DAO, services, vues JavaFX).
+- `src/main/resources/styles/app.css` : theme pastel commun (cartes, boutons, tableaux).
+- `src/main/resources/i18n` : base pour les ressources de traduction supplementaires.
 
-## Prérequis
-- JDK 17 ou supérieur installé.
-- [sbt](https://www.scala-sbt.org/) 1.10.2 ou supérieur (voir `project/build.properties`).
-- Accès internet lors du premier `sbt run` pour télécharger les dépendances (JavaFX, SQLite JDBC, PDFBox).
+## Prerequis
+- JDK 17 (ou plus recent) dans le PATH.
+- [sbt](https://www.scala-sbt.org/) 1.10.x.
+- Acces reseau lors du tout premier lancement pour telecharger JavaFX, SQLite JDBC et PDFBox.
 
-## Installation et exécution
+## Installation et execution
 ```bash
+sbt compile   # laisse PDFBox initialiser son cache de polices
 sbt run
 ```
-Le téléchargement des dépendances peut prendre quelques instants au premier lancement. L’application démarre ensuite avec une fenêtre contenant quatre onglets : Clients, Articles, Factures et Paramètres.
+Au lancement, la fenetre principale affiche quatre onglets : Clients, Articles, Factures et Parametres. Les listes se rafraichissent automatiquement lors des operations CRUD et lorsque l'onglet Factures devient actif.
 
 ## Export PDF
-Les fichiers PDF sont générés dans `%USERPROFILE%\app\` (ou `$HOME/app/`). Le nom du fichier suit la convention `FACTURE_<numero>.pdf`. Les coordonnées de l’entreprise et le taux de TVA utilisés proviennent des paramètres enregistrés.
+- Les PDF sont enregistres dans `%USERPROFILE%\app\factures` sous Windows et `~/app/factures` sur Linux/macOS.
+- Le contenu suit la structure imposee : entete entreprise, titre FACTURE + numero/date, coordonnees client, tableau (Description | Qte | PU HT | Total HT), recapitulatif (Sous-total HT, TVA xx %, Total TTC).
+- Le service `PdfService` cree un cache local `pdfbox-font-cache` et force les logs PDFBox au niveau ERROR via `slf4j-simple`. Merci de conserver cette initialisation.
 
-## Notes complémentaires
-- Le schéma SQLite est appliqué automatiquement au démarrage (tables `company`, `clients`, `items`, `invoices`, `invoice_lines`, `settings`).
-- Le taux de TVA est stocké en base dans la table `settings` (clé `vat_rate`) et appliqué par défaut lors de la création de nouvelles factures.
-- Les dépendances JavaFX incluent les classifieurs spécifiques à l’OS pour assurer la présence des bibliothèques natives.
+## Notes techniques
+- Base SQLite : fichier `invoicer.db` cree automatiquement dans `%USERPROFILE%\app` (ou `~/app`).
+- Schemas et migrations sont assures par les DAO au demarrage (tables `company`, `clients`, `items`, `invoices`, `invoice_lines`, `settings`).
+- L'UI applique une architecture MVC/MVVM simple (services -> vues JavaFX). Les nouvelles vues doivent reutiliser les classes CSS existantes (`card`, `form-card`, `primary-button`, etc.) pour rester coherentes.
+- L'onglet Factures encapsule le formulaire dans un `ScrollPane` afin de conserver l'accessibilite sur des ecrans de petite hauteur.
 
-## Lancer les tests
-Ce projet ne contient pas encore de suite de tests automatisés. Vous pouvez valider manuellement les fonctionnalités principales via l’interface graphique après compilation.
+## Personnalisation du theme
+La palette pastel et les composants stylises sont definis dans `styles/app.css`. En cas d'ajout de nouvelles classes, documenter le changement ici pour guider les contributeurs.
+
+## Tests
+Le projet ne comporte pas encore de suite de tests automatisee. Une validation manuelle via l'interface graphique est recommande apres toute modification importante.
