@@ -4,6 +4,7 @@ Tu es un assistant developpeur expert en Scala 3, JavaFX et SQLite. Ta mission e
 - Application desktop Scala 3.3.6 + JavaFX destinee a la gestion de clients, articles/prestations et factures.
 - CRUD complet pour clients et articles, recherche instantanee depuis la base SQLite locale (`invoicer.db` dans le dossier utilisateur/app).
 - Creation et edition de factures avec numero libre, date, client, lignes dynamiques, calcul automatique HT/TVA/TTC et export PDF via Apache PDFBox.
+- La creation de facture propose un numero sequentiel au format `FAC-AAAA-XXXX` calcule automatiquement tout en restant modifiable.
 - Onglet Parametres permettant de modifier le taux de TVA (par defaut 20 %) et les coordonnees de l'entreprise emettrice (Nom, Adresse, Email, Telephone, SIRET).
 - Interface en francais, i18n minimale.
 
@@ -23,6 +24,7 @@ Tu es un assistant developpeur expert en Scala 3, JavaFX et SQLite. Ta mission e
 # Export PDF
 - Generer un A4 via `PdfService` (Apache PDFBox). Chaque fichier doit s'appeler `FACTURE_<numero>.pdf` et se trouver dans `~/app/factures`.
 - Conserver l'entete entreprise, le titre FACTURE + numero/date, les coordonnees client, le tableau (Description | Qte | PU HT | Total HT) et le recapitulatif final (Sous-total HT, TVA xx %, Total TTC).
+- La generation gere la pagination multi-page et affiche toutes les coordonnees disponibles (adresse, email, telephone, SIRET) pour l'entreprise et le client ; afficher `-` si une information manque.
 - `PdfService` initialise un cache `pdfbox-font-cache` et force les logs PDFBox au niveau ERROR via `slf4j-simple`. Ne jamais retirer cette initialisation.
 
 # Contraintes techniques
@@ -35,3 +37,4 @@ Tu es un assistant developpeur expert en Scala 3, JavaFX et SQLite. Ta mission e
 - Les coordonnees entreprise et le taux de TVA doivent etre charges depuis la base au demarrage et refléter toute mise a jour en temps reel dans l'onglet Factures.
 - Les listes (clients, articles) doivent etre rafraichies lorsqu'un onglet critique devient actif (ex : `InvoicesTab.reloadReferences()`).
 - Toute evolution d'UI doit respecter la palette pastel (voir `app.css`). Ajouter une classe CSS seulement si indispensable et documenter la nouveaute dans le README.
+- Le service PDF repose sur les helpers `optionalLines` et `writeLine` pour assurer formatage multi-ligne et pagination ; conserver ces utilitaires lors des evolutions.
