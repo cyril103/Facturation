@@ -1,0 +1,20 @@
+# sbt / Scala build output
+/target/
+/project/target/
+/project/project/
+
+# Metals / Bloop / IDE tooling
+/.metals/
+/.bloop/
+/.idea/
+/.vscode/
+*.iml
+
+# Logs & crash reports
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# OS clutter
+.DS_Store
+Thumbs.db
