@@ -50,7 +50,10 @@ lazy val root = project
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
       case PathList("META-INF", "INDEX.LIST")  => MergeStrategy.discard
-      case PathList("META-INF", xs @ _*) if xs.lastOption.exists(_.endsWith(".SF") || _.endsWith(".DSA") || _.endsWith(".RSA")) =>
+      case PathList("META-INF", xs @ _*)
+          if xs.lastOption.exists(name =>
+            name.endsWith(".SF") || name.endsWith(".DSA") || name.endsWith(".RSA")
+          ) =>
         MergeStrategy.discard
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
       case PathList("module-info.class") => MergeStrategy.discard
