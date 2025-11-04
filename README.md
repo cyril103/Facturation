@@ -28,6 +28,15 @@ sbt run
 ```
 Au lancement, la fenetre principale affiche quatre onglets : Clients, Articles, Factures et Parametres. Les listes se rafraichissent automatiquement lors des operations CRUD et lorsque l'onglet Factures devient actif.
 
+## Distribution Windows double-clic
+- Assurez-vous que `JAVA_HOME` pointe vers un JDK 17+ complet incluant l'outil `jpackage` (disponible dans `bin\jpackage.exe`).
+- Generez l'image prete a l'emploi via :
+  ```bash
+  sbt packageWindowsImage
+  ```
+- Le resultat se trouve dans `target/jpackage/Invoicer/` et contient `Invoicer.exe`, un sous-dossier `runtime` embarquant le JRE reduit ainsi que tous les jars necessaires.
+- Vous pouvez distribuer ce dossier tel quel (zip) : l'utilisateur n'aura plus qu'a double-cliquer sur `Invoicer.exe`.
+
 ## Export PDF
 - Les PDF sont enregistres dans `%USERPROFILE%\app\factures` sous Windows et `~/app/factures` sur Linux/macOS.
 - Le contenu suit la structure imposee : entete entreprise, titre FACTURE + numero/date, coordonnees client, tableau (Description | Qte | PU HT | Total HT), recapitulatif (Sous-total HT, TVA xx %, Total TTC).
